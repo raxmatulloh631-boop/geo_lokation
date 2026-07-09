@@ -1,0 +1,44 @@
+// 1. Xaritani boshlang'ich standart nuqta (masalan, Toshkent yoki Marg'ilon) bilan yaratamiz.
+// Bu GPS aniqlaguncha xarita oq bo'lib qolmasligi uchun shart!
+var map = L.map('map').setView([41.311081, 69.240562], 12);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// 2. Telefon GPS-idan foydalanib foydalanuvchini dunyo xaritasidan qidiramiz
+map.locate({
+    setView: true,            // Topilgan zahoti xaritani o'sha yerga ko'chiradi
+    maxZoom: 16,              // Yaqinlashtirish darajasi
+    watch: true,              // Agar ko'chada yursangiz, xarita ham siz bilan birga yuradi
+    enableHighAccuracy: true  // GPSni eng yuqori aniqlikda (sun'iy yo'ldosh orqali) yoqadi
+});
+
+// 3. Telefon joylashuvingizni aniqlagan paytdagi hodisa
+function onLocationFound(e) {
+    // Eski markerni o'chirib, yangi marker qo'yamiz
+    if (window.myLocationMarker) {
+        window.myLocationMarker.setLatLng(e.latlng);
+    } else {
+        window.myLocationMarker = L.marker(e.latlng).addTo(map)
+            .bindPopup("Siz shu yerda turibsiz!").openPopup();
+    }
+
+    // Serverga (Django backendga) koordinatalarni jo'natish funksiyasi
+    // Bu funksiya sizda fetch() yoki $.ajax orqali yozilgan bo'lishi kerak
+    if (typeof sendLocationToServer === "function") {
+        sendLocationToServer(e.latlng.lat, e.latlng.lng);
+    } else {
+        console.log("Jo'natilgan koordinata:", e.latlng.lat, e.latlng.lng);
+    }
+}
+
+// Xarita joyni topsa, yuqoridagi funksiyani ishga tushiradi
+map.on('locationfound', onLocationFound);
+
+// Agar GPS o'chiq bo'lsa yoki brauzerda ruxsat berilmasa xato beradi
+map.on('locationerror', function(e) {
+    console.error("GPS xatolik:", e.message);
+    alert("GPS aniqlab bo'lmadi! Iltimos, telefonda lokatsiyani (GPS) va brauzer uchun joylashuv ruxsatini yoqing.");
+});

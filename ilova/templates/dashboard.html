@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nazorat Paneli</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; }
+        .custom-avatar-marker {
+            border: 3px solid #ef4444;
+            border-radius: 50%;
+            background: white;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .custom-avatar-marker img { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body class="relative bg-gray-100 font-sans overflow-hidden">
+
+    <div id="sidebar" class="absolute top-0 left-0 h-full w-72 bg-gray-900 text-white z-[999] transform -translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
+        <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+            <h2 id="sidebar-title" class="text-xl font-bold tracking-wide">Kuzatuv paneli</h2>
+            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white text-2xl font-bold p-1">&times;</button>
+        </div>
+        <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
+    </div>
+
+    <div class="absolute top-4 left-4 z-[998] flex items-center gap-3 max-w-sm sm:w-80">
+        <button onclick="toggleSidebar()" class="bg-gray-900 text-white px-4 py-2.5 rounded-xl font-medium shadow-md hover:bg-gray-800 transition flex items-center gap-2 whitespace-nowrap">
+            ☰ <span id="btn-text">Ro'yxat</span>
+        </button>
+
+        <div class="relative flex-1">
+            <input type="text" id="workerSearch"
+                   class="w-full bg-gray-900 text-white pl-4 pr-4 py-2.5 rounded-xl font-medium shadow-md border border-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-sm"
+                   placeholder="Ishchini qidirish...">
+
+            <div id="searchResults" class="absolute left-0 mt-1 w-full bg-gray-900 text-white rounded-xl shadow-xl border border-gray-800 hidden max-h-60 overflow-y-auto z-[1000] p-1 space-y-1">
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        var map = L.map('map', { zoomControl: false }).setView([41.311081, 69.240562], 12);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        var markers = {};
+        var globalWorkersList = []; // Qidiruv tizimi foydalanishi uchun kesh ro'yxat
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        }
+
+        async function yuklash() {
+            try {
+                let res = await fetch('/api/map-data/');
+                let data = await res.json();
+
+                document.getElementById('sidebar-title').innerText = data.rejim === 'talim' ? "Kelmaganlar" : "Ishchilar";
+                document.getElementById('btn-text').innerText = data.rejim === 'talim' ? "Kelmaganlar" : "Ishchilar";
+
+                let listHtml = "";
+                globalWorkersList = data.majliz; // Kelgan yangi ro'yxatni qidiruvga beramiz
+
+                data.majliz.forEach(p => {
+                    if(!p.lat || !p.lng) return;
+
+                    if (markers[p.id]) {
+                        markers[p.id].setLatLng([p.lat, p.lng]);
+                    } else {
+                        let myIcon = L.divIcon({
+                            className: 'custom-avatar-marker',
+                            html: `<img src="${p.rasm}" />`,
+                            iconSize: [45, 45],
+                            iconAnchor: [22, 22]
+                        });
+
+                        markers[p.id] = L.marker([p.lat, p.lng], {icon: myIcon}).addTo(map)
+                            .bindPopup(`<b>${p.ism}</b><br>Tel: ${p.telefon}<br>Holat: ${p.aloqa}`);
+                    }
+
+                    let statusColor = p.aloqa === 'onlayn' ? 'bg-green-500' : 'bg-red-500';
+                    listHtml += `
+                        <div onclick="map.flyTo([${p.lat}, ${p.lng}], 16); toggleSidebar();" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl cursor-pointer transition flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full overflow-hidden border border-gray-600">
+                                <img src="${p.rasm}" class="w-full h-full object-fit" />
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-sm">${p.ism}</h4>
+                                <p class="text-xs text-gray-400">${p.telefon}</p>
+                            </div>
+                            <span class="w-3 h-3 rounded-full ${statusColor}"></span>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('user-list').innerHTML = listHtml;
+
+            } catch (err) {
+                console.error("Xatolik:", err);
+            }
+        }
+
+        // --- INTELLIGENT SEARCH LOGIC (AQLLI QIDIRUV) ---
+        const searchInput = document.getElementById('workerSearch');
+        const searchResults = document.getElementById('searchResults');
+
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase().trim();
+            searchResults.innerHTML = '';
+
+            if (query === '') {
+                searchResults.classList.add('hidden');
+                return;
+            }
+
+            let foundAny = false;
+
+            globalWorkersList.forEach(p => {
+                if (!p.lat || !p.lng) return;
+
+                const nameMatch = p.ism && p.ism.toLowerCase().includes(query);
+                const phoneMatch = p.telefon && p.telefon.includes(query);
+
+                if (nameMatch || phoneMatch) {
+                    foundAny = true;
+
+                    const div = document.createElement('div');
+                    div.className = "p-2 hover:bg-gray-800 rounded-lg cursor-pointer transition flex items-center gap-3 text-left";
+
+                    let statusColor = p.aloqa === 'onlayn' ? 'bg-green-500' : 'bg-red-500';
+                    div.innerHTML = `
+                        <div class="w-8 h-8 rounded-full overflow-hidden border border-gray-700">
+                            <img src="${p.rasm}" class="w-full h-full object-cover" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-medium text-xs truncate">${p.ism}</h4>
+                            <p class="text-[10px] text-gray-400 truncate">${p.telefon}</p>
+                        </div>
+                        <span class="w-2 h-2 rounded-full ${statusColor}"></span>
+                    `;
+
+                    // Ro'yxatdan ishchini tanlaganda xaritani o'sha joyga uchirish
+                    div.addEventListener('click', function() {
+                        searchInput.value = p.ism;
+                        searchResults.classList.add('hidden');
+
+                        map.flyTo([p.lat, p.lng], 16, { animate: true, duration: 1.5 });
+
+                        if (markers[p.id]) {
+                            markers[p.id].openPopup();
+                        }
+                    });
+
+                    searchResults.appendChild(div);
+                }
+            });
+
+            if (foundAny) {
+                searchResults.classList.remove('hidden');
+            } else {
+                searchResults.innerHTML = '<div class="p-3 text-xs text-gray-400 text-center">Xodim topilmadi</div>';
+                searchResults.classList.remove('hidden');
+            }
+        });
+
+        // Tashqariga bosilganda qidiruv ro'yxatini yopish
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+
+        setInterval(yuklash, 15000);
+        yuklash();
+    </script>
+</body>
+</html>
