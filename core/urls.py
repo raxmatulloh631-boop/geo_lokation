@@ -2,11 +2,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from ilova.views import dashboard_view
+from django.contrib.auth import views as auth_views  # Login tizimi uchun
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', dashboard_view, name='home'), # Bosh sahifaga srazu xaritani uladik!
+
+    # Tayyor login oynasi URL'i (templates/login.html faylini ochib qo'ygan bo'lishingiz kerak)
+    path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+
+    # Ilovaning ichidagi barcha url'larni asosiy sahifaga ulaymiz
     path('', include('ilova.urls')),
 ]
 

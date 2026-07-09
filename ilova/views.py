@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required  # 1. Buni qo'shdik
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,6 +9,7 @@ from .models import TizimSozlamasi, FoydalanuvchiProfil, Davomat, HarakatTarixi
 
 
 # 1. Boshliq/Ustoz ko'radigan asosiy Xarita sahifasi
+@login_required(login_url='login')  # 2. Kirmagan odamni shartta siz yaratgan login'ga otadi
 def dashboard_view(request):
     return render(request, 'dashboard.html')
 
@@ -15,14 +17,15 @@ def dashboard_view(request):
 # 2. Ishchi/O'quvchi ko'radigan sodda boshqaruv sahifasi
 def mobil_view(request):
     if not request.user.is_authenticated:
-        return redirect('login')  # Kirilmagan bo'lsa loginga majburlab haydaydi
+        return redirect('login')
     return render(request, 'mobil.html')
 
 
 # 3. Tizimga kirish (Login) sahifasi mantiqi
 def login_view(request):
+    # Agar foydalanuvchi oldin kirgan bo'lsa, shundoq xaritaga (dashboardga) o'tib ketadi
     if request.user.is_authenticated:
-        return redirect('mobil')  # Agar kirgan bo'lsa srazu mobil panelga o'tadi
+        return redirect('dashboard')  # 3. 'mobil' edi, 'dashboard'ga o'zgartirdik (Instagramdek)
 
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -31,7 +34,7 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
-            return redirect('mobil')
+            return redirect('dashboard')  # 4. Bu yerda ham muvaffaqiyatli kirgach xaritaga yo'naltiramiz
         else:
             return render(request, 'login.html', {'error': 'Login yoki parol xato!'})
 
@@ -119,8 +122,8 @@ class XaritaMalumotlariAPI(APIView):
                 "lng": float(p.joriy_longitude) if p.joriy_longitude else None,
                 "status": status_text,
                 "aloqa": onlayn_status,
-                "vaqt_boshlanishi": p.vaqt_boshlanishi.strftime("%H:%M"),
-                "vaqt_yakuni": p.vaqt_yakuni.strftime("%H:%M")
+                "vaqt_boshlanishi": p.vaqt_boshlanishi.strftime("%H:%M") if p.vaqt_boshlanishi else "09:00",
+                "vaqt_yakuni": p.vaqt_yakuni.strftime("%H:%M") if p.vaqt_yakuni else "18:00"
             })
 
         return Response({"rejim": rejim, "majliz": aktiv_profillar})
