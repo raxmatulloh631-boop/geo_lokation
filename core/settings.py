@@ -65,14 +65,11 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'logistika_db',
-        'USER': 'postgres',
-        'PASSWORD': 'root',
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
-    }
+    'default': dj_database_url.config(
+        default='postgres://postgresql://raxmatulloh:m9pvJfE9rRMW4SOb4HWUp7FCgCG87Sm3@dpg-d9adtv0k1i2s73fg91fg-a.oregon-postgres.render.com/geodb_wn1a',
+        conn_max_age=600,
+        ssl_require=True
+    )
 }
 
 if os.environ.get('DATABASE_URL'):
