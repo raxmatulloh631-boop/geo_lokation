@@ -34,20 +34,18 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
-            return redirect('dashboard')  # 4. Bu yerda ham muvaffaqiyatli kirgach xaritaga yo'naltiramiz
+            return redirect('dashboard')
         else:
             return render(request, 'login.html', {'error': 'Login yoki parol xato!'})
 
     return render(request, 'login.html')
 
 
-# 4. Tizimdan chiqish (Logout) mantiqi
 def logout_view(request):
     logout(request)
     return redirect('login')
 
 
-# 5. Telefonlar lokatsiya yuboradigan API Endpoint
 class LokatsiyaYangilashAPI(APIView):
     def post(self, request):
         user = request.user
@@ -86,7 +84,6 @@ class LokatsiyaYangilashAPI(APIView):
         return Response({"status": "Muvaffaqiyatli yangilandi"}, status=status.HTTP_200_OK)
 
 
-# 6. Xarita o'zi uchun ma'lumotlarni tortadigan API
 class XaritaMalumotlariAPI(APIView):
     def get(self, request):
         sozlama = TizimSozlamasi.objects.first()
